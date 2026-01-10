@@ -1,31 +1,34 @@
 document.addEventListener("DOMContentLoaded", function () {
-  fetch("https://695ff8f77f037703a815576c.mockapi.io/check")
-    .then((response) => response.json())
-    .then((data) => {
-      if (data[0].check === false) {
-        alert("Phiên bản này đã bị vô hiệu hóa. Vui lòng liên hệ tác giả 0862201004 để được hỗ trợ.");
-        window.close();
-      }
-    });
+  // Version check (optional - you can remove this if not needed)
+  const versionCheckUrl = "https://695ff8f77f037703a815576c.mockapi.io/check";
 
-  const enableBtn = document.getElementById("enableEdit");
-  const disableBtn = document.getElementById("disableEdit");
+  // UI Elements
+  const enableEditBtn = document.getElementById("enableEdit");
+  const disableEditBtn = document.getElementById("disableEdit");
   const resetPageBtn = document.getElementById("resetPage");
   const resetAllBtn = document.getElementById("resetAll");
   const autoEnableCheckbox = document.getElementById("autoEnable");
-  const pageCountElem = document.getElementById("pageCount");
-  const editCountElem = document.getElementById("editCount");
+  const showIndicatorsCheckbox = document.getElementById("showIndicators");
+  const pageCountEl = document.getElementById("pageCount");
+  const editCountEl = document.getElementById("editCount");
+  const statusText = document.getElementById("statusText");
+  const statusIndicator = document.getElementById("statusIndicator");
 
-  // Load settings
-  chrome.storage.sync.get(["autoEnable"], function (data) {
-    autoEnableCheckbox.checked = data.autoEnable || false;
+  // Load saved settings
+  chrome.storage.sync.get(["autoEnable", "showIndicators"], function (result) {
+    if (autoEnableCheckbox) {
+      autoEnableCheckbox.checked = result.autoEnable || false;
+    }
+    if (showIndicatorsCheckbox) {
+      showIndicatorsCheckbox.checked = result.showIndicators !== false;
+    }
   });
 
-  // Load stats
+  // Update statistics
   updateStats();
 
-  // Enable editing
-  enableBtn.addEventListener("click", function () {
+  // Enable editing button
+  enableEditBtn.addEventListener("click", function () {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0]) {
         chrome.tabs
@@ -34,15 +37,14 @@ document.addEventListener("DOMContentLoaded", function () {
             showNotification("Đã bật chế độ sửa văn bản!");
           })
           .catch(() => {
-            // Silent fail - don't show error in console
             showNotification("⚠️ Vui lòng reload trang web");
           });
       }
     });
   });
 
-  // Disable editing
-  disableBtn.addEventListener("click", function () {
+  // Disable editing button
+  disableEditBtn.addEventListener("click", function () {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0]) {
         chrome.tabs
@@ -50,21 +52,17 @@ document.addEventListener("DOMContentLoaded", function () {
           .then(() => {
             showNotification("Đã tắt chế độ sửa văn bản.");
           })
-          .catch(() => {
-            // Silent fail
-          });
+          .catch(() => {});
       }
     });
   });
 
-  // Reset current page
+  // Reset current page button
   resetPageBtn.addEventListener("click", function () {
     if (confirm("Đặt lại tất cả thay đổi trên trang này?")) {
       chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
         if (tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, { action: "resetPage" }).catch(() => {
-            // Silent fail
-          });
+          chrome.tabs.sendMessage(tabs[0].id, { action: "resetPage" }).catch(() => {});
         }
       });
       showNotification("Đã đặt lại trang.");
@@ -72,15 +70,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Reset all pages
+  // Reset all button
   resetAllBtn.addEventListener("click", function () {
     if (confirm("Xóa TẤT CẢ thay đổi trên MỌI trang?")) {
       chrome.storage.local.clear(function () {
         chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
           if (tabs[0]) {
-            chrome.tabs.sendMessage(tabs[0].id, { action: "resetAll" }).catch(() => {
-              // Silent fail
-            });
+            chrome.tabs.sendMessage(tabs[0].id, { action: "resetAll" }).catch(() => {});
           }
         });
         showNotification("Đã xóa tất cả dữ liệu.");
@@ -89,13 +85,18 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Auto-enable toggle
+  // Auto-enable setting
   autoEnableCheckbox.addEventListener("change", function () {
     chrome.storage.sync.set({ autoEnable: this.checked });
     showNotification(this.checked ? "Đã bật tự động kích hoạt" : "Đã tắt tự động kích hoạt");
   });
 
-  // Update statistics
+  // Show indicators setting
+  showIndicatorsCheckbox.addEventListener("change", function () {
+    chrome.storage.sync.set({ showIndicators: this.checked });
+  });
+
+  // Function to update statistics
   function updateStats() {
     chrome.storage.local.get(null, function (data) {
       let pageCount = 0;
@@ -104,17 +105,17 @@ document.addEventListener("DOMContentLoaded", function () {
       Object.keys(data).forEach((key) => {
         if (key.startsWith("page_")) {
           pageCount++;
-          const edits = data[key];
-          editCount += Object.keys(edits).length;
+          const pageData = data[key];
+          editCount += Object.keys(pageData).length;
         }
       });
 
-      pageCountElem.textContent = pageCount;
-      editCountElem.textContent = editCount;
+      pageCountEl.textContent = pageCount;
+      editCountEl.textContent = editCount;
     });
   }
 
-  // Show notification
+  // Function to show notification
   function showNotification(message) {
     const notification = document.createElement("div");
     notification.className = "notification";
@@ -126,13 +127,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 3000);
   }
 
-  // Lắng nghe cập nhật stats
-  chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
-    if (request.action === "updateStats") {
+  // Listen for stats updates
+  chrome.runtime.onMessage.addListener(function (message, sender, sendResponse) {
+    if (message.action === "updateStats") {
       updateStats();
     }
   });
 
-  // Update stats every 2 seconds while popup is open
+  // Update stats every 2 seconds
   setInterval(updateStats, 2000);
 });
