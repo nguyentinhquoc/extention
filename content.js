@@ -7,6 +7,8 @@ class TextEditor {
     this.settings = { showIndicators: true };
     this.saveTimeout = null;
     this.observer = null;
+    this.urlCheckInterval = null;
+    this.urlChangeTimeout = null;
     this.init();
   }
 
@@ -24,6 +26,7 @@ class TextEditor {
     this.loadSettings();
     this.loadSavedEdits();
     this.setupObservers();
+    this.setupUrlChangeListener();
     console.log("✅ Text Editor đã khởi động");
   }
 
@@ -154,12 +157,13 @@ class TextEditor {
 
   applyEdit(element, content) {
     if (!element || !content) return;
-
     const selector = this.generateSelector(element);
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
     }
-
+    if (!element.getAttribute("data-text-editor-original")) {
+      element.setAttribute("data-text-editor-original", element.innerHTML);
+    }
     element.innerHTML = content;
     element.classList.add("text-editor-edited");
   }
@@ -256,7 +260,9 @@ class TextEditor {
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
     }
-
+    if (!element.getAttribute("data-text-editor-original")) {
+      element.setAttribute("data-text-editor-original", element.innerHTML);
+    }
     element.contentEditable = true;
     element.spellcheck = true;
     element.lang = "vi";
@@ -439,6 +445,105 @@ class TextEditor {
     };
 
     startObserving();
+  }
+
+  // Theo dõi thay đổi URL (SPA) và reload để có DOM sạch
+  setupUrlChangeListener() {
+    // Tránh thiết lập nhiều lần
+    if (window.__textEditorUrlListenerSetup) return;
+    window.__textEditorUrlListenerSetup = true;
+
+    let lastUrl = location.href;
+
+    // Lắng nghe back/forward
+    window.addEventListener("popstate", () => {
+      this.handleUrlChange();
+    });
+
+    // Patch pushState/replaceState một lần
+    if (!window.__textEditorHistoryPatched) {
+      window.__textEditorHistoryPatched = true;
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
+
+      history.pushState = function (...args) {
+        originalPushState.apply(this, args);
+        window.dispatchEvent(new Event("pushstate"));
+      };
+
+      history.replaceState = function (...args) {
+        originalReplaceState.apply(this, args);
+        window.dispatchEvent(new Event("replacestate"));
+      };
+    }
+
+    window.addEventListener("pushstate", () => {
+      this.handleUrlChange();
+    });
+    window.addEventListener("replacestate", () => {
+      this.handleUrlChange();
+    });
+
+    // Polling dự phòng cho SPA phức tạp
+    if (this.urlCheckInterval) clearInterval(this.urlCheckInterval);
+    this.urlCheckInterval = setInterval(() => {
+      if (location.href !== lastUrl) {
+        lastUrl = location.href;
+        this.handleUrlChange();
+      }
+    }, 1000);
+  }
+
+  // Debounce để tránh reload liên tiếp quá nhanh
+  handleUrlChange() {
+    clearTimeout(this.urlChangeTimeout);
+    this.urlChangeTimeout = setTimeout(() => {
+      this._doHandleUrlChange();
+    }, 50);
+  }
+
+  // Reload trang khi URL thay đổi để lấy DOM sạch, tránh DOM bị trộn bởi React
+  _doHandleUrlChange() {
+    const oldKey = this.currentPageKey;
+    this.generatePageKey();
+    if (oldKey === this.currentPageKey) return;
+
+    // Dọn dẹp mềm và re-apply dữ liệu cho URL mới
+    this.cleanupForUrlChange();
+    this.loadSavedEdits();
+    this.setupObservers();
+  }
+
+  // Khôi phục chỉnh sửa về bản gốc và xoá dấu vết mà không reload
+  cleanupForUrlChange() {
+    if (this.observer) {
+      try {
+        this.observer.disconnect();
+      } catch (_) {}
+    }
+
+    document.querySelectorAll(".text-editor-edited, .text-editor-editing").forEach((el) => {
+      const attrOriginal = el.getAttribute("data-text-editor-original");
+      if (attrOriginal != null) {
+        el.innerHTML = attrOriginal;
+        el.removeAttribute("data-text-editor-original");
+      } else {
+        // Fallback: khôi phục bằng selector nếu đã lưu
+        try {
+          const sel = this.generateSelector(el);
+          if (this.originalContents.has(sel)) {
+            el.innerHTML = this.originalContents.get(sel);
+          }
+        } catch (_) {}
+      }
+      el.classList.remove("text-editor-edited");
+      el.classList.remove("text-editor-editing");
+      el.contentEditable = false;
+    });
+
+    this.originalContents.clear();
+    this.editedElements.clear();
+    this.savedPageData = null;
   }
 
   handleMessage(message) {
