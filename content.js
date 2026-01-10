@@ -143,8 +143,8 @@ class TextEditor {
   }
 
   applyAllEdits() {
-    if (!this.savedPageData) return;
-
+    if (!this.savedPageData || this.isApplyingEdits) return; // THÊM KIỂM TRA
+    this.isApplyingEdits = true; // BẮT ĐẦU APPLY
     Object.entries(this.savedPageData).forEach(([selector, content]) => {
       try {
         const element = document.querySelector(selector);
@@ -153,6 +153,9 @@ class TextEditor {
         }
       } catch (error) {}
     });
+    setTimeout(() => {
+      this.isApplyingEdits = false;
+    }, 100);
   }
 
   applyEdit(element, content) {
@@ -466,7 +469,7 @@ class TextEditor {
 
   setupObservers() {
     this.observer = new MutationObserver((mutations) => {
-      if (!this.savedPageData) return;
+      if (!this.savedPageData || this.isApplyingEdits || this.isHandlingUrlChange) return;
 
       let hasNewElements = false;
       mutations.forEach((mutation) => {
