@@ -358,48 +358,92 @@ class TextEditor {
   }
 
   generateSelector(element) {
+    if (!element || element.nodeType !== 1) return "";
+
+    // If element has an ID, this is already unique and robust
     if (element.id) return "#" + CSS.escape(element.id);
 
+    const root = document.body || document.documentElement;
     const path = [];
-    let current = element;
-    let depth = 0;
-    const maxDepth = 5;
+    const prefAttrs = [
+      "data-testid",
+      "data-test",
+      "data-qa",
+      "data-cy",
+      "data-id",
+      "aria-label",
+      "name",
+      "role",
+      "type",
+      "href",
+      "title",
+      "alt",
+    ];
 
-    while (current && current !== document.body && depth < maxDepth) {
-      let selector = current.tagName.toLowerCase();
+    const isUnique = (sel) => {
+      try {
+        return document.querySelectorAll(sel).length === 1;
+      } catch (_) {
+        return false;
+      }
+    };
 
-      if (current.id) {
-        selector = "#" + CSS.escape(current.id);
-        path.unshift(selector);
-        break;
+    const buildNodeSelector = (el) => {
+      const tag = el.tagName.toLowerCase();
+
+      // Prefer stable attributes when available
+      for (const attr of prefAttrs) {
+        const val = el.getAttribute(attr);
+        if (val && typeof val === "string" && val.trim().length > 0) {
+          const safeVal = val.replace(/"/g, '\\"');
+          return tag + "[" + attr + '="' + safeVal + '"]';
+        }
       }
 
-      if (current.className && typeof current.className === "string") {
-        const classes = current.className
+      // Fall back to class-based selector (limit few classes for brevity)
+      let selector = tag;
+      if (el.className && typeof el.className === "string") {
+        const classes = el.className
           .trim()
           .split(/\s+/)
           .filter((cls) => cls && !cls.startsWith("text-editor"));
         if (classes.length > 0) {
-          const firstClasses = classes.slice(0, 2);
-          selector += "." + firstClasses.map((cls) => CSS.escape(cls)).join(".");
+          const subset = classes
+            .slice(0, 3)
+            .map((cls) => "." + CSS.escape(cls))
+            .join("");
+          selector += subset;
         }
       }
 
-      if (current.parentNode) {
-        const siblings = Array.from(current.parentNode.children);
-        const sameTag = siblings.filter((sib) => sib.tagName === current.tagName);
-        if (sameTag.length > 1) {
-          const index = sameTag.indexOf(current) + 1;
-          selector += ":nth-of-type(" + index + ")";
-        }
+      // Add nth-child for disambiguation among siblings
+      if (el.parentElement) {
+        const index = Array.prototype.indexOf.call(el.parentElement.children, el) + 1;
+        selector += ":nth-child(" + index + ")";
+      }
+      return selector;
+    };
+
+    // Ascend the DOM tree, stopping when selector becomes unique
+    let current = element;
+    while (current && current !== root && current.nodeType === 1) {
+      if (current.id) {
+        path.unshift("#" + CSS.escape(current.id));
+        const sel = path.join(" > ");
+        return sel;
       }
 
-      path.unshift(selector);
-      current = current.parentNode;
-      depth++;
+      const nodeSel = buildNodeSelector(current);
+      path.unshift(nodeSel);
+      const candidate = path.join(" > ");
+      if (isUnique(candidate)) return candidate;
+
+      current = current.parentElement;
     }
 
-    return path.join(" > ");
+    // Final candidate (may be unique already)
+    const finalCandidate = path.join(" > ");
+    return finalCandidate;
   }
 
   showToast(message) {
