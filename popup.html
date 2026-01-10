@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Text Editor</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <div class="header">
+        <div class="logo">
+          <i class="fas fa-edit"></i>
+          <div>
+            <h1>Text Editor</h1>
+            <p class="subtitle">Wavebear Nguyễn (0862201004)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Controls -->
+      <div class="card">
+        <h3><i class="fas fa-sliders-h"></i> Điều khiển</h3>
+
+        <div class="button-group">
+          <button id="enableEdit" class="btn btn-success"><i class="fas fa-pencil-alt"></i> Bật chỉnh sửa</button>
+          <button id="disableEdit" class="btn btn-secondary"><i class="fas fa-times"></i> Tắt chỉnh sửa</button>
+        </div>
+
+        <div class="button-group">
+          <button id="resetPage" class="btn btn-warning"><i class="fas fa-redo"></i> Reset trang này</button>
+          <button id="resetAll" class="btn btn-danger"><i class="fas fa-trash-alt"></i> Xóa tất cả</button>
+        </div>
+      </div>
+
+      <!-- Settings -->
+      <div class="card">
+        <h3><i class="fas fa-cog"></i> Cài đặt</h3>
+
+        <div class="setting-item">
+          <label class="switch">
+            <input type="checkbox" id="autoEnable" />
+            <span class="slider"></span>
+          </label>
+          <div class="setting-info">
+            <span class="setting-title">Tự động bật</span>
+            <span class="setting-desc">Tự bật chế độ chỉnh sửa khi vào trang</span>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <label class="switch">
+            <input type="checkbox" id="showIndicators" />
+            <span class="slider"></span>
+          </label>
+          <div class="setting-info">
+            <span class="setting-title">Hiện biểu tượng</span>
+            <span class="setting-desc">Hiện biểu tượng ✎ trên text đã sửa</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Statistics -->
+      <div class="card">
+        <h3><i class="fas fa-chart-bar"></i> Thống kê</h3>
+
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-icon">
+              <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value" id="pageCount">0</span>
+              <span class="stat-label">Trang đã sửa</span>
+            </div>
+          </div>
+
+          <div class="stat-box">
+            <div class="stat-icon">
+              <i class="fas fa-edit"></i>
+            </div>
+            <div class="stat-content">
+              <span class="stat-value" id="editCount">0</span>
+              <span class="stat-label">Lần chỉnh sửa</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Instructions -->
+      <div class="card instructions">
+        <h3><i class="fas fa-info-circle"></i> Hướng dẫn</h3>
+
+        <div class="instruction-item">
+          <i class="fas fa-mouse-pointer"></i>
+          <span>Nhấp vào văn bản để chỉnh sửa</span>
+        </div>
+
+        <div class="instruction-item">
+          <i class="fas fa-save"></i>
+          <span>Tự động lưu khi bạn chỉnh sửa</span>
+        </div>
+
+        <div class="instruction-item">
+          <i class="fas fa-sync"></i>
+          <span>Giữ nguyên sau khi tải lại trang</span>
+        </div>
+
+        <div class="instruction-item">
+          <i class="fas fa-undo"></i>
+          <span>Nhấp ✎ để khôi phục bản gốc</span>
+        </div>
+      </div>
+
+      <!-- Status -->
+      <div class="status-bar">
+        <span id="statusText">Sẵn sàng</span>
+        <span class="status-indicator" id="statusIndicator"></span>
+      </div>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

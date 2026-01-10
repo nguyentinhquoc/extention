@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+  <body></body>
+  <script>
+    fetch("https://695ff8f77f037703a815576c.mockapi.io/check")
+      .then((response) => response.json())
+      .then((data) => {
+        console.log("Your public IP address is:", data[0].check);
+      });
+  </script>
+</html>
