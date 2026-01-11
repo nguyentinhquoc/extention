@@ -1,3 +1,4 @@
+// Popup UI logic: điều khiển bật/tắt sửa, reset dữ liệu và hiển thị thống kê
 document.addEventListener("DOMContentLoaded", function () {
   // fetch("https://695ff8f77f037703a815576c.mockapi.io/check")
   //   .then((response) => response.json())
@@ -16,15 +17,15 @@ document.addEventListener("DOMContentLoaded", function () {
   const pageCountElem = document.getElementById("pageCount");
   const editCountElem = document.getElementById("editCount");
 
-  // Load settings
+  // Load settings: nạp tùy chọn tự động bật chỉnh sửa
   chrome.storage.sync.get(["autoEnable"], function (data) {
     autoEnableCheckbox.checked = data.autoEnable || false;
   });
 
-  // Load stats
+  // Load stats: lấy thống kê ban đầu khi mở popup
   updateStats();
 
-  // Enable editing
+  // Enable editing: gửi message bật chế độ chỉnh sửa tới tab đang mở
   enableBtn.addEventListener("click", function () {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0]) {
@@ -41,7 +42,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Disable editing
+  // Disable editing: gửi message tắt chế độ chỉnh sửa
   disableBtn.addEventListener("click", function () {
     chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
       if (tabs[0]) {
@@ -57,7 +58,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 
-  // Reset current page
+  // Reset current page: xóa dữ liệu chỉnh sửa của URL hiện tại
   resetPageBtn.addEventListener("click", function () {
     if (confirm("Đặt lại tất cả thay đổi trên trang này?")) {
       chrome.tabs.query({ active: true, currentWindow: true }, function (tabs) {
@@ -72,7 +73,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Reset all pages
+  // Reset all pages: xóa toàn bộ dữ liệu lưu trên mọi trang
   resetAllBtn.addEventListener("click", function () {
     if (confirm("Xóa TẤT CẢ thay đổi trên MỌI trang?")) {
       chrome.storage.local.clear(function () {
@@ -89,13 +90,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  // Auto-enable toggle
+  // Auto-enable toggle: bật/tắt tự động kích hoạt chỉnh sửa khi trang tải
   autoEnableCheckbox.addEventListener("change", function () {
     chrome.storage.sync.set({ autoEnable: this.checked });
     showNotification(this.checked ? "Đã bật tự động kích hoạt" : "Đã tắt tự động kích hoạt");
   });
 
-  // Update statistics
+  // Update statistics: đếm số trang đã lưu và tổng số chỉnh sửa
   function updateStats() {
     chrome.storage.local.get(null, function (data) {
       let pageCount = 0;
@@ -114,7 +115,7 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
-  // Show notification
+  // Show notification: hiển thị thông báo nhỏ trong popup
   function showNotification(message) {
     const notification = document.createElement("div");
     notification.className = "notification";
@@ -126,13 +127,13 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 3000);
   }
 
-  // Lắng nghe cập nhật stats
+  // Lắng nghe cập nhật stats từ content script để refresh UI
   chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     if (request.action === "updateStats") {
       updateStats();
     }
   });
 
-  // Update stats every 2 seconds while popup is open
+  // Cập nhật stats mỗi 2s khi popup đang mở (auto-refresh)
   setInterval(updateStats, 2000);
 });
