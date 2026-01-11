@@ -4,46 +4,52 @@ class TextEditor {
     this.originalContents = new Map();
     this.editedElements = new Set();
     this.currentPageKey = null;
-    this.settings = { showIndicators: true };
+    this.lastUrl = null;
+    this.urlPollInterval = null;
+    this.savedPageData = null;
+    this.settings = {
+      showIndicators: true,
+    };
     this.saveTimeout = null;
     this.observer = null;
-    this.urlCheckInterval = null;
-    this.urlChangeTimeout = null;
+    this.handleClick = this.handleClick.bind(this);
+    this.handleInput = this.handleInput.bind(this);
+    this.handleBlur = this.handleBlur.bind(this);
+    this.handleKeyDown = this.handleKeyDown.bind(this);
+    this.handleLinkClick = this.handleLinkClick.bind(this);
     this.init();
   }
 
   init() {
     if (document.readyState === "loading") {
-      document.addEventListener("DOMContentLoaded", () => this.initializeEditor());
+      document.addEventListener("DOMContentLoaded", () => {
+        this.initializeEditor();
+      });
     } else {
       this.initializeEditor();
     }
   }
 
   initializeEditor() {
+    this.ensureCssEscape();
     this.generatePageKey();
     this.injectStyles();
     this.loadSettings();
     this.loadSavedEdits();
     this.setupObservers();
-    this.setupUrlChangeListener();
+    this.setupUrlChangeReload();
     console.log("✅ Text Editor đã khởi động");
   }
 
   generatePageKey() {
     try {
       const url = new URL(window.location.href);
-      const href = url.href;
-
-      // For TikTok Ads Manage and Facebook Ads Manager, ignore query parameters
-      const ignoreQuery =
-        href.startsWith("https://ads.tiktok.com/i18n/manage") ||
-        href.startsWith("https://adsmanager.facebook.com/adsmanager");
-
-      this.currentPageKey = ignoreQuery
-        ? "page_" + url.hostname + url.pathname
-        : "page_" + url.hostname + url.pathname + url.search;
-    } catch (error) {
+      if (url.hostname === "adsmanager.facebook.com") {
+        this.currentPageKey = "page_" + url.hostname + url.pathname;
+      } else {
+        this.currentPageKey = "page_" + url.hostname + url.pathname + url.search;
+      }
+    } catch (e) {
       this.currentPageKey = "page_" + window.location.hostname + window.location.pathname;
     }
   }
@@ -52,66 +58,78 @@ class TextEditor {
     const styleId = "text-editor-styles";
     if (document.getElementById(styleId)) return;
 
-    const css = `
-      /* Editing mode indicator */
-      .text-editor-editing {
-        outline: 2px dashed #70f !important;
-        cursor: pointer !important;
-        background: rgba(119, 0, 255, 0.05) !important;
-        border-radius: 4px !important;
-        padding: 2px 6px !important;
-        min-height: 1.2em !important;
-        position: relative !important;
-        z-index: 9999 !important;
-      }
+    const styles = `
+            /* Editing mode indicator */
+            .text-editor-editing {
+                outline: 2px dashed #70f !important;
+                cursor: pointer !important;
+                background: rgba(119, 0, 255, 0.05) !important;
+                border-radius: 4px !important;
+                padding: 2px 6px !important;
+                min-height: 1.2em !important;
+                position: relative !important;
+                z-index: 9999 !important;
+            }
 
-      /* Disable links when editing mode is active */
-      body.text-editor-active a {
-        pointer-events: none !important;
-        cursor: text !important;
-        opacity: 0.6 !important;
-      }
+            /* Disable links when editing mode is active */
+            body.text-editor-active a {
+                pointer-events: none !important;
+                cursor: text !important;
+                opacity: 0.6 !important;
+            }
 
-      /* Edited element styling */
-      .text-editor-edited {
-        position: relative !important;
-        transition: all 0.2s ease !important;
-      }
+            /* Edited element styling */
+            .text-editor-edited {
+                position: relative !important;
+                transition: all 0.2s ease !important;
+            }
 
-      /* Toast notification */
-      .text-editor-toast {
-        position: fixed !important;
-        top: 20px !important;
-        right: 20px !important;
-        background: linear-gradient(135deg, #333, #555) !important;
-        color: white !important;
-        padding: 12px 24px !important;
-        border-radius: 10px !important;
-        z-index: 1000000 !important;
-        font-family: 'Segoe UI', sans-serif !important;
-        font-size: 14px !important;
-        box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;
-        animation: textEditorToast 3s ease !important;
-        max-width: 300px !important;
-        display: flex !important;
-        align-items: center !important;
-        gap: 10px !important;
-        backdrop-filter: blur(10px) !important;
-        border: 1px solid rgba(255,255,255,0.1) !important;
-      }
+            /* Toast notification */
+            .text-editor-toast {
+                position: fixed !important;
+                top: 20px !important;
+                right: 20px !important;
+                background: linear-gradient(135deg, #333, #555) !important;
+                color: white !important;
+                padding: 12px 24px !important;
+                border-radius: 10px !important;
+                z-index: 1000000 !important;
+                font-family: 'Segoe UI', sans-serif !important;
+                font-size: 14px !important;
+                box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;
+                animation: textEditorToast 3s ease !important;
+                max-width: 300px !important;
+                display: flex !important;
+                align-items: center !important;
+                gap: 10px !important;
+                backdrop-filter: blur(10px) !important;
+                border: 1px solid rgba(255,255,255,0.1) !important;
+            }
 
-      @keyframes textEditorToast {
-        0% { transform: translateX(100%) translateY(-20px); opacity: 0; }
-        15% { transform: translateX(0) translateY(0); opacity: 1; }
-        85% { transform: translateX(0) translateY(0); opacity: 1; }
-        100% { transform: translateX(100%) translateY(-20px); opacity: 0; }
-      }
-    `;
+            @keyframes textEditorToast {
+                0% {
+                    transform: translateX(100%) translateY(-20px);
+                    opacity: 0;
+                }
+                15% {
+                    transform: translateX(0) translateY(0);
+                    opacity: 1;
+                }
+                85% {
+                    transform: translateX(0) translateY(0);
+                    opacity: 1;
+                }
+                100% {
+                    transform: translateX(100%) translateY(-20px);
+                    opacity: 0;
+                }
+            }
+        `;
 
-    const style = document.createElement("style");
-    style.id = styleId;
-    style.textContent = css;
-    document.head.appendChild(style);
+    const styleEl = document.createElement("style");
+    styleEl.id = styleId;
+    styleEl.textContent = styles;
+    document.head.appendChild(styleEl);
   }
 
   loadSettings() {
@@ -122,50 +140,50 @@ class TextEditor {
 
   async loadSavedEdits() {
     try {
-      const result = await chrome.storage.local.get([this.currentPageKey]);
-      const pageData = result[this.currentPageKey];
+      const data = await chrome.storage.local.get([this.currentPageKey]);
+      const savedData = data[this.currentPageKey];
+      if (!savedData) return;
 
-      if (!pageData) return;
-
-      this.savedPageData = pageData;
+      this.savedPageData = savedData;
       this.applyAllEdits();
 
       if (document.readyState === "loading") {
-        document.addEventListener("DOMContentLoaded", () => this.applyAllEdits());
+        document.addEventListener("DOMContentLoaded", () => {
+          this.applyAllEdits();
+        });
       }
 
       if (document.readyState !== "complete") {
-        window.addEventListener("load", () => this.applyAllEdits());
+        window.addEventListener("load", () => {
+          this.applyAllEdits();
+        });
       }
     } catch (error) {
-      console.log("Error loading edits:", error);
+      console.error("Error loading edits:", error);
     }
   }
 
   applyAllEdits() {
-    if (!this.savedPageData || this.isApplyingEdits) return; // THÊM KIỂM TRA
-    this.isApplyingEdits = true; // BẮT ĐẦU APPLY
-    Object.entries(this.savedPageData).forEach(([selector, content]) => {
+    if (!this.savedPageData) return;
+
+    Object.entries(this.savedPageData).forEach(([selector, contentData]) => {
       try {
         const element = document.querySelector(selector);
         if (element && !element.classList.contains("text-editor-edited")) {
-          this.applyEdit(element, content.content || content);
+          this.applyEdit(element, contentData.content || contentData);
         }
-      } catch (error) {}
+      } catch (e) {
+        // Ignore errors
+      }
     });
-    setTimeout(() => {
-      this.isApplyingEdits = false;
-    }, 100);
   }
 
   applyEdit(element, content) {
     if (!element || !content) return;
+
     const selector = this.generateSelector(element);
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
-    }
-    if (!element.getAttribute("data-text-editor-original")) {
-      element.setAttribute("data-text-editor-original", element.innerHTML);
     }
     element.innerHTML = content;
     element.classList.add("text-editor-edited");
@@ -201,12 +219,6 @@ class TextEditor {
   }
 
   addEventListeners() {
-    this.handleClick = this.handleClick.bind(this);
-    this.handleInput = this.handleInput.bind(this);
-    this.handleBlur = this.handleBlur.bind(this);
-    this.handleKeyDown = this.handleKeyDown.bind(this);
-    this.handleLinkClick = this.handleLinkClick.bind(this);
-
     document.addEventListener("click", this.handleClick, true);
     document.addEventListener("input", this.handleInput, true);
     document.addEventListener("blur", this.handleBlur, true);
@@ -244,14 +256,13 @@ class TextEditor {
     if (!this.isEditing || event.target.isContentEditable) return;
 
     const element = event.target;
-    const skipTags = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"];
-
-    if (skipTags.includes(element.tagName)) return;
+    const ignoreTags = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"];
+    if (ignoreTags.includes(element.tagName)) return;
 
     const hasText = element.textContent && element.textContent.trim().length > 0;
-    const isEditable = element.closest('[contenteditable="true"]');
+    const isAlreadyEditable = element.getAttribute("contenteditable");
 
-    if (hasText && !isEditable) {
+    if (hasText && !isAlreadyEditable) {
       event.preventDefault();
       event.stopPropagation();
       this.startEditing(element);
@@ -263,9 +274,7 @@ class TextEditor {
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
     }
-    if (!element.getAttribute("data-text-editor-original")) {
-      element.setAttribute("data-text-editor-original", element.innerHTML);
-    }
+
     element.contentEditable = true;
     element.spellcheck = true;
     element.lang = "vi";
@@ -284,7 +293,7 @@ class TextEditor {
     if (!this.isEditing) return;
 
     const target = event.target;
-    if (target.isContentEditable) {
+    if (target.contentEditable) {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = setTimeout(() => {
         this.saveEdit(target);
@@ -308,7 +317,7 @@ class TextEditor {
     if (!this.isEditing) return;
 
     const target = event.target;
-    if (target.isContentEditable) {
+    if (target.contentEditable) {
       if (event.key === "Escape") {
         target.blur();
       } else if (event.ctrlKey && event.key === "Enter") {
@@ -328,12 +337,15 @@ class TextEditor {
       const pageData = result[this.currentPageKey] || {};
       pageData[selector] = content;
 
-      const data = {};
-      data[this.currentPageKey] = pageData;
-
-      chrome.storage.local.set(data, () => {
-        if (chrome.runtime?.id) {
-          chrome.runtime.sendMessage({ action: "updateStats" }).catch(() => {});
+      const saveData = {};
+      saveData[this.currentPageKey] = pageData;
+      chrome.storage.local.set(saveData, () => {
+        try {
+          if (chrome.runtime?.id) {
+            chrome.runtime.sendMessage({ action: "updateStats" });
+          }
+        } catch (_) {
+          // ignore messaging errors
         }
       });
     });
@@ -354,8 +366,12 @@ class TextEditor {
       this.originalContents.clear();
       this.editedElements.clear();
       this.showToast("🔄 Đã đặt lại trang này");
-      if (chrome.runtime?.id) {
-        chrome.runtime.sendMessage({ action: "updateStats" }).catch(() => {});
+      try {
+        if (chrome.runtime?.id) {
+          chrome.runtime.sendMessage({ action: "updateStats" });
+        }
+      } catch (_) {
+        // ignore messaging errors
       }
     });
   }
@@ -450,12 +466,11 @@ class TextEditor {
   }
 
   showToast(message) {
-    const toastId = "text-editor-toast";
-    const existingToast = document.getElementById(toastId);
+    const existingToast = document.getElementById("text-editor-toast");
     if (existingToast) existingToast.remove();
 
     const toast = document.createElement("div");
-    toast.id = toastId;
+    toast.id = "text-editor-toast";
     toast.className = "text-editor-toast";
     toast.textContent = message;
     document.body.appendChild(toast);
@@ -467,130 +482,94 @@ class TextEditor {
     }, 3000);
   }
 
+  // Detect URL changes (including SPA) and reload the page
+  setupUrlChangeReload() {
+    try {
+      this.lastUrl = window.location.href;
+      const reloadIfUrlChanged = () => {
+        const current = window.location.href;
+        if (current !== this.lastUrl) {
+          this.lastUrl = current;
+          // Force full reload to ensure content script reinitializes
+          window.location.reload();
+        }
+      };
+
+      // Listen to standard navigation-related events
+      window.addEventListener("popstate", reloadIfUrlChanged, true);
+      window.addEventListener("hashchange", reloadIfUrlChanged, true);
+
+      // Fallback polling in case no event fires
+      this.urlPollInterval = setInterval(reloadIfUrlChanged, 800);
+
+      window.addEventListener("beforeunload", () => {
+        if (this.urlPollInterval) {
+          clearInterval(this.urlPollInterval);
+          this.urlPollInterval = null;
+        }
+      });
+    } catch (e) {
+      // As a fallback, simple polling
+      try {
+        if (!this.urlPollInterval) {
+          this.urlPollInterval = setInterval(() => {
+            if (window.location.href !== this.lastUrl) {
+              this.lastUrl = window.location.href;
+              window.location.reload();
+            }
+          }, 1000);
+        }
+      } catch (_) {}
+    }
+  }
+
+  ensureCssEscape() {
+    try {
+      if (!window.CSS) {
+        window.CSS = {};
+      }
+      if (typeof window.CSS.escape !== "function") {
+        window.CSS.escape = function (value) {
+          return String(value).replace(/[^a-zA-Z0-9_\-]/g, function (s) {
+            return "\\" + s;
+          });
+        };
+      }
+    } catch (_) {}
+  }
+
   setupObservers() {
     this.observer = new MutationObserver((mutations) => {
-      if (!this.savedPageData || this.isApplyingEdits || this.isHandlingUrlChange) return;
+      if (!this.savedPageData) return;
 
-      let hasNewElements = false;
+      let hasNewNodes = false;
       mutations.forEach((mutation) => {
         if (mutation.addedNodes.length > 0) {
-          hasNewElements = true;
+          hasNewNodes = true;
         }
       });
 
-      if (hasNewElements) {
+      if (hasNewNodes) {
         this.applyAllEdits();
       }
     });
 
-    const startObserving = () => {
+    const observeBody = () => {
       if (document.body) {
         this.observer.observe(document.body, { childList: true, subtree: true });
       } else {
-        setTimeout(startObserving, 10);
+        setTimeout(observeBody, 10);
       }
     };
 
-    startObserving();
-  }
+    observeBody();
 
-  // Theo dõi thay đổi URL (SPA) và reload để có DOM sạch
-  setupUrlChangeListener() {
-    // Tránh thiết lập nhiều lần
-    if (window.__textEditorUrlListenerSetup) return;
-    window.__textEditorUrlListenerSetup = true;
-
-    let lastUrl = location.href;
-
-    // Lắng nghe back/forward
-    window.addEventListener("popstate", () => {
-      this.handleUrlChange();
-    });
-
-    // Patch pushState/replaceState một lần
-    if (!window.__textEditorHistoryPatched) {
-      window.__textEditorHistoryPatched = true;
-      const originalPushState = history.pushState;
-      const originalReplaceState = history.replaceState;
-
-      history.pushState = function (...args) {
-        originalPushState.apply(this, args);
-        window.dispatchEvent(new Event("pushstate"));
-      };
-
-      history.replaceState = function (...args) {
-        originalReplaceState.apply(this, args);
-        window.dispatchEvent(new Event("replacestate"));
-      };
-    }
-
-    window.addEventListener("pushstate", () => {
-      this.handleUrlChange();
-    });
-    window.addEventListener("replacestate", () => {
-      this.handleUrlChange();
-    });
-
-    // Polling dự phòng cho SPA phức tạp
-    if (this.urlCheckInterval) clearInterval(this.urlCheckInterval);
-    this.urlCheckInterval = setInterval(() => {
-      if (location.href !== lastUrl) {
-        lastUrl = location.href;
-        this.handleUrlChange();
-      }
-    }, 1000);
-  }
-
-  // Debounce để tránh reload liên tiếp quá nhanh
-  handleUrlChange() {
-    clearTimeout(this.urlChangeTimeout);
-    this.urlChangeTimeout = setTimeout(() => {
-      this._doHandleUrlChange();
-    }, 50);
-  }
-
-  // Reload trang khi URL thay đổi để lấy DOM sạch, tránh DOM bị trộn bởi React
-  _doHandleUrlChange() {
-    const oldKey = this.currentPageKey;
-    this.generatePageKey();
-    if (oldKey === this.currentPageKey) return;
-
-    // Dọn dẹp mềm và re-apply dữ liệu cho URL mới
-    this.cleanupForUrlChange();
-    this.loadSavedEdits();
-    this.setupObservers();
-  }
-
-  // Khôi phục chỉnh sửa về bản gốc và xoá dấu vết mà không reload
-  cleanupForUrlChange() {
-    if (this.observer) {
+    // Cleanup observer on page unload
+    window.addEventListener("beforeunload", () => {
       try {
-        this.observer.disconnect();
+        if (this.observer) this.observer.disconnect();
       } catch (_) {}
-    }
-
-    document.querySelectorAll(".text-editor-edited, .text-editor-editing").forEach((el) => {
-      const attrOriginal = el.getAttribute("data-text-editor-original");
-      if (attrOriginal != null) {
-        el.innerHTML = attrOriginal;
-        el.removeAttribute("data-text-editor-original");
-      } else {
-        // Fallback: khôi phục bằng selector nếu đã lưu
-        try {
-          const sel = this.generateSelector(el);
-          if (this.originalContents.has(sel)) {
-            el.innerHTML = this.originalContents.get(sel);
-          }
-        } catch (_) {}
-      }
-      el.classList.remove("text-editor-edited");
-      el.classList.remove("text-editor-editing");
-      el.contentEditable = false;
     });
-
-    this.originalContents.clear();
-    this.editedElements.clear();
-    this.savedPageData = null;
   }
 
   handleMessage(message) {
@@ -613,16 +592,16 @@ class TextEditor {
   }
 }
 
-// Initialize TextEditor
+// Khởi tạo TextEditor
 try {
   if (!window.textEditor) {
     window.textEditor = new TextEditor();
   }
 } catch (error) {
-  console.log("Error initializing TextEditor:", error);
+  console.error("Error initializing TextEditor:", error);
 }
 
-// Listen for messages from popup
+// Lắng nghe messages từ extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   try {
     if (window.textEditor) {
@@ -632,13 +611,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: "TextEditor not initialized" });
     }
   } catch (error) {
-    console.log("Error handling message:", error);
+    console.error("Error handling message:", error);
     sendResponse({ success: false, error: error.message });
   }
   return true;
 });
 
-// Auto-enable if setting is on
+// Tự động bật chế độ chỉnh sửa nếu được cấu hình
 chrome.storage.sync.get(["autoEnable"], (result) => {
   if (result.autoEnable) {
     setTimeout(() => {
