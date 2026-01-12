@@ -1,14 +1,6 @@
-/**
- * Trình chỉnh sửa văn bản ngay trên trang web.
- * Quản lý trạng thái sửa, lưu/khôi phục nội dung theo từng URL, và xử lý sự kiện liên quan.
- */
 class TextEditor {
-  /**
-   * Khởi tạo instance, bind handler và các biến trạng thái cơ bản.
-   */
   constructor() {
     this.isEditing = false;
-    this.isRestoring = false;
     this.originalContents = new Map();
     this.editedElements = new Set();
     this.currentPageKey = null;
@@ -28,9 +20,6 @@ class TextEditor {
     this.init();
   }
 
-  /**
-   * Khởi chạy editor: đợi DOM sẵn sàng rồi gọi `initializeEditor()`.
-   */
   init() {
     if (document.readyState === "loading") {
       document.addEventListener("DOMContentLoaded", () => {
@@ -41,10 +30,6 @@ class TextEditor {
     }
   }
 
-  /**
-   * Thiết lập toàn bộ: util cần thiết, key trang, style, cài đặt, dữ liệu đã lưu,
-   * observers, và cơ chế reload khi URL thay đổi.
-   */
   initializeEditor() {
     this.ensureCssEscape();
     this.generatePageKey();
@@ -56,10 +41,6 @@ class TextEditor {
     console.log("✅ Text Editor đã khởi động");
   }
 
-  /**
-   * Tạo khóa duy nhất cho trang hiện tại để lưu dữ liệu chỉnh sửa.
-   * Với adsmanager.facebook.com: bỏ phần query để key ổn định hơn.
-   */
   generatePageKey() {
     try {
       const url = new URL(window.location.href);
@@ -73,10 +54,6 @@ class TextEditor {
     }
   }
 
-  /**
-   * Tiêm CSS để hiển thị trạng thái chỉnh sửa, toast thông báo, v.v.
-   * Tránh tiêm trùng lặp bằng cách kiểm tra theo id.
-   */
   injectStyles() {
     const styleId = "text-editor-styles";
     if (document.getElementById(styleId)) return;
@@ -96,9 +73,8 @@ class TextEditor {
 
             /* Disable links when editing mode is active */
             body.text-editor-active a {
-                pointer-events: none !important;
-                cursor: text !important;
-                opacity: 0.6 !important;
+              /* Do not disable pointer events globally; just change cursor. */
+              cursor: text !important;
             }
 
             /* Edited element styling */
@@ -155,30 +131,16 @@ class TextEditor {
     document.head.appendChild(styleEl);
   }
 
-  /**
-   * Nạp cấu hình từ `chrome.storage.sync` (ví dụ hiển thị chỉ báo).
-   */
   loadSettings() {
     chrome.storage.sync.get(["showIndicators"], (result) => {
       this.settings.showIndicators = result.showIndicators !== false;
     });
   }
 
-  /**
-   * Nạp và áp dụng dữ liệu chỉnh sửa đã lưu cho trang hiện tại.
-   * Gọi lại khi `DOMContentLoaded`/`load` để đảm bảo nội dung được áp dụng.
-   */
   async loadSavedEdits() {
-    console.log("Start loadSavedEdits ...");
-    // Nếu chrome storage không khả dụng, bỏ qua
-    const data = await chrome.storage.local.get([this.currentPageKey]);
-    const savedData = data[this.currentPageKey];
-    console.log("🚀 ~ TextEditor ~ loadSavedEdits ~ savedData:", savedData);
-    console.log("🚀 ~ TextEditor ~ loadSavedEdits ~ this.currentPageKey:", this.currentPageKey);
-    if (!savedData) return;
-    // Nếu key trong chrome storage trùng với trang hiện tại thì mới áp dụng
-    if (!this.currentPageKey) return;
     try {
+      const data = await chrome.storage.local.get([this.currentPageKey]);
+      const savedData = data[this.currentPageKey];
       if (!savedData) return;
 
       this.savedPageData = savedData;
@@ -200,17 +162,13 @@ class TextEditor {
     }
   }
 
-  /**
-   * Áp dụng tất cả chỉnh sửa đã lưu lên DOM (nếu tồn tại phần tử tương ứng).
-   */
   applyAllEdits() {
-    if (this.isRestoring || !this.savedPageData) return;
+    if (!this.savedPageData) return;
+
     Object.entries(this.savedPageData).forEach(([selector, contentData]) => {
       try {
         const element = document.querySelector(selector);
         if (element && !element.classList.contains("text-editor-edited")) {
-          // Lưu lại HTML gốc để có thể khôi phục chính xác
-          element.dataset.oldContent = element.innerHTML;
           this.applyEdit(element, contentData.content || contentData);
         }
       } catch (e) {
@@ -221,6 +179,7 @@ class TextEditor {
 
   applyEdit(element, content) {
     if (!element || !content) return;
+
     const selector = this.generateSelector(element);
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
@@ -229,60 +188,9 @@ class TextEditor {
     element.classList.add("text-editor-edited");
   }
 
-  removeAllEdits() {
-    console.log("Removing all edits...");
-    let restored = 0;
-    this.originalContents.forEach((originalHTML, selector) => {
-      try {
-        const element = document.querySelector(selector);
-        if (element) {
-          element.innerHTML = originalHTML;
-          if (element.classList) {
-            element.classList.remove("text-editor-edited");
-            element.classList.remove("text-editor-editing");
-          }
-          if (element.getAttribute && element.getAttribute("contenteditable") === "true") {
-            element.setAttribute("contenteditable", "false");
-          }
-          if (element.dataset && element.dataset.oldContent) {
-            delete element.dataset.oldContent;
-          }
-          restored++;
-        }
-      } catch (_) {}
-    });
-    console.log("✅ Restored elements:", restored);
-  }
-
-  removeEdit(element) {
-    if (!element) return;
-    console.log("Removing edit for element:", element);
-    const selector = this.generateSelector(element);
-    const mapHTML = this.originalContents.get(selector);
-    const oldContent = element.dataset ? element.dataset.oldContent : undefined;
-    if (mapHTML !== undefined) {
-      element.innerHTML = mapHTML;
-    } else if (oldContent !== undefined) {
-      element.innerHTML = oldContent;
-    }
-    if (element.classList) {
-      element.classList.remove("text-editor-edited");
-      element.classList.remove("text-editor-editing");
-    }
-    if (element.getAttribute && element.getAttribute("contenteditable") === "true") {
-      element.setAttribute("contenteditable", "false");
-    }
-    if (element.dataset && element.dataset.oldContent) {
-      delete element.dataset.oldContent;
-    }
-    return;
-  }
-
-  /**
-   * Bật chế độ chỉnh sửa: đổi con trỏ, bật listeners và chỉ báo.
-   */
   enableEditing() {
     if (this.isEditing) return;
+
     this.isEditing = true;
     document.body.style.cursor = "text";
     document.body.classList.add("text-editor-active");
@@ -291,9 +199,6 @@ class TextEditor {
     this.showToast("✎ Chế độ chỉnh sửa đã bật - Click vào text để sửa");
   }
 
-  /**
-   * Tắt chế độ chỉnh sửa: gỡ listeners, khôi phục trạng thái element/contenteditable.
-   */
   disableEditing() {
     if (!this.isEditing) return;
 
@@ -303,8 +208,12 @@ class TextEditor {
     this.removeEventListeners();
     this.disableLinks();
 
+    document.querySelectorAll(".text-editor-editing").forEach((el) => {
+      el.classList.remove("text-editor-editing");
+    });
+
     document.querySelectorAll('[contenteditable="true"]').forEach((el) => {
-      el.contentEditable = false;
+      // el.contentEditable = false;
       el.classList.remove("text-editor-editing");
       el.classList.add("text-editor-edited");
     });
@@ -312,9 +221,6 @@ class TextEditor {
     this.showToast("⏸ Chế độ chỉnh sửa đã tắt");
   }
 
-  /**
-   * Gắn các listener chính khi chỉnh sửa: click/input/blur/keydown.
-   */
   addEventListeners() {
     document.addEventListener("click", this.handleClick, true);
     document.addEventListener("input", this.handleInput, true);
@@ -322,9 +228,6 @@ class TextEditor {
     document.addEventListener("keydown", this.handleKeyDown, true);
   }
 
-  /**
-   * Gỡ các listener chính khi tắt chỉnh sửa.
-   */
   removeEventListeners() {
     document.removeEventListener("click", this.handleClick, true);
     document.removeEventListener("input", this.handleInput, true);
@@ -332,27 +235,18 @@ class TextEditor {
     document.removeEventListener("keydown", this.handleKeyDown, true);
   }
 
-  /**
-   * Gắn listener để vô hiệu hóa click link trong khi đang chỉnh sửa.
-   */
   enableLinks() {
     document.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", this.handleLinkClick, true);
     });
   }
 
-  /**
-   * Gỡ listener vô hiệu hóa link.
-   */
   disableLinks() {
     document.querySelectorAll("a").forEach((link) => {
       link.removeEventListener("click", this.handleLinkClick, true);
     });
   }
 
-  /**
-   * Ngăn hành vi click vào link khi đang chỉnh sửa.
-   */
   handleLinkClick(event) {
     if (this.isEditing) {
       event.preventDefault();
@@ -361,11 +255,20 @@ class TextEditor {
     }
   }
 
-  /**
-   * Khi click lên phần tử có text, bật contenteditable để sửa nếu hợp lệ.
-   */
   handleClick(event) {
-    if (!this.isEditing || event.target.isContentEditable) return;
+    if (!this.isEditing) return;
+
+    // While editing, prevent navigation on any anchor (delegated, covers dynamic nodes)
+    try {
+      const anchor = event.target && event.target.closest ? event.target.closest("a") : null;
+      if (anchor) {
+        event.preventDefault();
+        event.stopPropagation();
+        return false;
+      }
+    } catch (_) {}
+
+    if (event.target.isContentEditable) return;
 
     const element = event.target;
     const ignoreTags = ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"];
@@ -381,10 +284,6 @@ class TextEditor {
     }
   }
 
-  /**
-   * Bắt đầu chỉnh sửa một phần tử: bật contenteditable, focus và đưa con trỏ về cuối.
-   * @param {Element} element
-   */
   startEditing(element) {
     const selector = this.generateSelector(element);
     if (!this.originalContents.has(selector)) {
@@ -405,9 +304,6 @@ class TextEditor {
     selection.addRange(range);
   }
 
-  /**
-   * Khi người dùng gõ, debounce và lưu nội dung sau 500ms.
-   */
   handleInput(event) {
     if (!this.isEditing) return;
 
@@ -416,28 +312,22 @@ class TextEditor {
       clearTimeout(this.saveTimeout);
       this.saveTimeout = setTimeout(() => {
         this.saveEdit(target);
-      }, 500);
+      }, 1000);
     }
   }
 
-  /**
-   * Khi blur, lưu nội dung và thoát trạng thái chỉnh sửa của phần tử.
-   */
   handleBlur(event) {
     if (!this.isEditing) return;
-
     const target = event.target;
     if (target.isContentEditable) {
-      this.saveEdit(target);
-      target.contentEditable = false;
       target.classList.remove("text-editor-editing");
-      target.classList.add("text-editor-edited");
+      // target.contentEditable = false;
+      if (this.saveEdit(target)) {
+        target.classList.add("text-editor-edited");
+      }
     }
   }
 
-  /**
-   * Phím tắt khi chỉnh sửa: ESC để blur, Ctrl+Enter để lưu nhanh.
-   */
   handleKeyDown(event) {
     if (!this.isEditing) return;
 
@@ -452,14 +342,13 @@ class TextEditor {
     }
   }
 
-  /**
-   * Lưu nội dung chỉnh sửa của một phần tử vào `chrome.storage.local` theo key trang.
-   * @param {Element} element
-   */
   saveEdit(element) {
     const selector = this.generateSelector(element);
     const content = element.innerHTML;
-
+    if (content.length > 50) {
+      this.showToast("Vui lòng chọn đúng phần tử nhỏ hơn để chỉnh sửa. Nội dung tôi đa 50 ký tự.");
+      return;
+    }
     if (!chrome.runtime?.id) return;
 
     chrome.storage.local.get([this.currentPageKey], (result) => {
@@ -480,9 +369,6 @@ class TextEditor {
     });
   }
 
-  /**
-   * Khôi phục nội dung ban đầu của tất cả phần tử đã chỉnh sửa và xóa dữ liệu lưu.
-   */
   resetPage() {
     this.originalContents.forEach((content, selector) => {
       const element = document.querySelector(selector);
@@ -508,12 +394,6 @@ class TextEditor {
     });
   }
 
-  /**
-   * Tạo CSS selector tương đối ổn định/duy nhất cho một phần tử để lưu/áp dụng sửa.
-   * Ưu tiên `id` hoặc các thuộc tính ổn định (data-testid, aria-label, ...).
-   * @param {Element} element
-   * @returns {string} selector
-   */
   generateSelector(element) {
     if (!element || element.nodeType !== 1) return "";
 
@@ -603,10 +483,6 @@ class TextEditor {
     return finalCandidate;
   }
 
-  /**
-   * Hiển thị thông báo toast tạm thời ở góc phải.
-   * @param {string} message
-   */
   showToast(message) {
     const existingToast = document.getElementById("text-editor-toast");
     if (existingToast) existingToast.remove();
@@ -625,9 +501,6 @@ class TextEditor {
   }
 
   // Detect URL changes (including SPA) and reload the page
-  /**
-   * Theo dõi URL thay đổi (SPA/điều hướng) và reload trang để tái khởi động content script.
-   */
   setupUrlChangeReload() {
     try {
       this.lastUrl = window.location.href;
@@ -636,21 +509,8 @@ class TextEditor {
         if (current !== this.lastUrl) {
           this.lastUrl = current;
           // Force full reload to ensure content script reinitializes
-          // Xoá các dấu vết extension trên DOM trước khi reload
-          console.log("🔄 URL changed, reloading page");
-          // Bắt đầu chế độ khôi phục để tránh applyAllEdits chạy lại
-          this.isRestoring = true;
-          // Tạo key mới cho URL mới
-          this.generatePageKey();
-          // Xóa các chỉnh sửa hiện tại khỏi DOM
-          this.removeAllEdits();
-          // Làm sạch bộ nhớ tạm hiện tại
-          this.originalContents.clear();
-          this.savedPageData = null;
-          // Áp dụng dữ liệu đã lưu cho URL mới (nếu có)
-          this.loadSavedEdits();
-          // Kết thúc chế độ khôi phục
-          this.isRestoring = false;
+          this.disableEditing();
+          window.location.reload();
         }
       };
 
@@ -674,14 +534,8 @@ class TextEditor {
           this.urlPollInterval = setInterval(() => {
             if (window.location.href !== this.lastUrl) {
               this.lastUrl = window.location.href;
-              console.log("🔄 URL changed, reloading page");
-              this.isRestoring = true;
-              this.generatePageKey();
-              this.removeAllEdits();
-              this.originalContents.clear();
-              this.savedPageData = null;
-              this.loadSavedEdits();
-              this.isRestoring = false;
+              this.disableEditing();
+              window.location.reload();
             }
           }, 1000);
         }
@@ -689,9 +543,6 @@ class TextEditor {
     }
   }
 
-  /**
-   * Polyfill đơn giản cho `CSS.escape` (nếu thiếu) để tạo selector an toàn.
-   */
   ensureCssEscape() {
     try {
       if (!window.CSS) {
@@ -707,13 +558,9 @@ class TextEditor {
     } catch (_) {}
   }
 
-  /**
-   * Quan sát DOM để áp dụng lại các chỉnh sửa khi có node mới được thêm vào.
-   * Dọn dẹp observer khi unload.
-   */
   setupObservers() {
     this.observer = new MutationObserver((mutations) => {
-      if (this.isRestoring || !this.savedPageData) return;
+      if (!this.savedPageData) return;
 
       let hasNewNodes = false;
       mutations.forEach((mutation) => {
@@ -745,10 +592,6 @@ class TextEditor {
     });
   }
 
-  /**
-   * Xử lý message từ extension popup/background: bật/tắt chỉnh sửa, reset.
-   * @param {{action:string}} message
-   */
   handleMessage(message) {
     switch (message.action) {
       case "enableEditing":
@@ -767,61 +610,9 @@ class TextEditor {
         break;
     }
   }
-
-  /**
-   * Bỏ tất cả dấu vết mà extension đã thêm vào DOM (style/toast/lớp/thuộc tính),
-   * và khôi phục nội dung gốc của các phần tử đã chỉnh sửa.
-   * LƯU Ý: KHÔNG xóa dữ liệu trong chrome.storage – chỉ thao tác trên DOM.
-   */
-  removeExtensionDomArtifacts() {
-    try {
-      // 1) Khôi phục nội dung gốc cho mọi phần tử đã chỉnh sửa (nếu có lưu)
-      this.originalContents.forEach((originalHTML, selector) => {
-        try {
-          const el = document.querySelector(selector);
-          if (el) {
-            el.innerHTML = originalHTML;
-          }
-        } catch (_) {}
-      });
-
-      // 2) Tắt contenteditable và gỡ các lớp trạng thái chỉnh sửa
-      const edited = document.querySelectorAll('[contenteditable="true"], .text-editor-editing, .text-editor-edited');
-      edited.forEach((el) => {
-        try {
-          if (el.getAttribute && el.getAttribute("contenteditable") === "true") {
-            el.setAttribute("contenteditable", "false");
-          }
-          if (el.classList) {
-            el.classList.remove("text-editor-editing");
-            el.classList.remove("text-editor-edited");
-          }
-        } catch (_) {}
-      });
-
-      // 3) Gỡ style đã tiêm và toast (nếu tồn tại)
-      try {
-        const styleEl = document.getElementById("text-editor-styles");
-        if (styleEl && styleEl.parentNode) styleEl.parentNode.removeChild(styleEl);
-      } catch (_) {}
-
-      try {
-        const toastEl = document.getElementById("text-editor-toast");
-        if (toastEl && toastEl.parentNode) toastEl.parentNode.removeChild(toastEl);
-      } catch (_) {}
-
-      // 4) Gỡ trạng thái trên body
-      try {
-        document.body.classList.remove("text-editor-active");
-        document.body.style.cursor = "";
-      } catch (_) {}
-    } catch (_) {
-      // Im lặng khi lỗi – chỉ thực hiện thao tác DOM
-    }
-  }
 }
 
-// Khởi tạo TextEditor: tạo instance một lần duy nhất
+// Khởi tạo TextEditor
 try {
   if (!window.textEditor) {
     window.textEditor = new TextEditor();
@@ -830,7 +621,7 @@ try {
   console.error("Error initializing TextEditor:", error);
 }
 
-// Lắng nghe message từ extension và forward vào TextEditor
+// Lắng nghe messages từ extension
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   try {
     if (window.textEditor) {
