@@ -53,7 +53,6 @@ class TextEditor {
     this.loadSavedEdits();
     this.setupObservers();
     this.setupUrlChangeReload();
-    console.log("✅ Text Editor đã khởi động");
   }
 
   /**
@@ -169,12 +168,10 @@ class TextEditor {
    * Gọi lại khi `DOMContentLoaded`/`load` để đảm bảo nội dung được áp dụng.
    */
   async loadSavedEdits() {
-    console.log("Start loadSavedEdits ...");
     // Nếu chrome storage không khả dụng, bỏ qua
     const data = await chrome.storage.local.get([this.currentPageKey]);
     const savedData = data[this.currentPageKey];
-    console.log("🚀 ~ TextEditor ~ loadSavedEdits ~ savedData:", savedData);
-    console.log("🚀 ~ TextEditor ~ loadSavedEdits ~ this.currentPageKey:", this.currentPageKey);
+
     if (!savedData) return;
     // Nếu key trong chrome storage trùng với trang hiện tại thì mới áp dụng
     if (!this.currentPageKey) return;
@@ -230,7 +227,6 @@ class TextEditor {
   }
 
   removeAllEdits() {
-    console.log("Removing all edits...");
     let restored = 0;
     this.originalContents.forEach((originalHTML, selector) => {
       try {
@@ -251,12 +247,11 @@ class TextEditor {
         }
       } catch (_) {}
     });
-    console.log("✅ Restored elements:", restored);
   }
 
   removeEdit(element) {
     if (!element) return;
-    console.log("Removing edit for element:", element);
+
     const selector = this.generateSelector(element);
     const mapHTML = this.originalContents.get(selector);
     const oldContent = element.dataset ? element.dataset.oldContent : undefined;
@@ -531,12 +526,10 @@ class TextEditor {
     }
 
     if (!surfaceContainer) {
-      console.log("Không tìm thấy span có data-surface");
       return "";
     }
 
     const dataSurface = surfaceContainer.getAttribute("data-surface");
-    console.log("✅ Tìm thấy data-surface:", dataSurface);
 
     // Parse data-surface để lấy row ID và cell ID
     // Ví dụ: /am/table/table_row:120236492122940187unit/table_cell:spend
@@ -544,15 +537,11 @@ class TextEditor {
     const cellMatch = dataSurface.match(/table_cell:([^/]+)/);
 
     if (!rowMatch || !cellMatch) {
-      console.log("Không tìm thấy row ID hoặc cell ID trong data-surface");
       return "";
     }
 
     const rowId = rowMatch[1];
     const cellId = cellMatch[1];
-
-    console.log("✅ Row ID:", rowId);
-    console.log("✅ Cell ID:", cellId);
 
     // Tạo selector dựa trên cặp row ID và cell ID (duy nhất)
     const finalSelector =
@@ -562,16 +551,13 @@ class TextEditor {
       cellId +
       '\'] div[geotextcolor="value"] span';
 
-    console.log("📍 Final selector:", finalSelector);
-
     // Kiểm tra selector có unique không
     try {
       const matches = document.querySelectorAll(finalSelector);
-      console.log("🔍 Số phần tử match:", matches.length);
+
       if (matches.length === 1) {
-        console.log("✅ Selector là duy nhất");
       } else {
-        console.warn("⚠️ Selector match nhiều phần tử:", matches.length);
+        this.showToast("Chỉ có thể chọn phần tử được phép chỉnh sửa.");
       }
     } catch (_) {}
 
@@ -612,7 +598,7 @@ class TextEditor {
           this.lastUrl = current;
           // Force full reload to ensure content script reinitializes
           // Xoá các dấu vết extension trên DOM trước khi reload
-          console.log("🔄 URL changed, reloading page");
+
           // Bắt đầu chế độ khôi phục để tránh applyAllEdits chạy lại
           this.isRestoring = true;
           // Tạo key mới cho URL mới
@@ -649,7 +635,7 @@ class TextEditor {
           this.urlPollInterval = setInterval(() => {
             if (window.location.href !== this.lastUrl) {
               this.lastUrl = window.location.href;
-              console.log("🔄 URL changed, reloading page");
+
               this.isRestoring = true;
               this.generatePageKey();
               this.removeAllEdits();
