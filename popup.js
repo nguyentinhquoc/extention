@@ -1,13 +1,72 @@
 // Popup UI logic: điều khiển bật/tắt sửa, reset dữ liệu và hiển thị thống kê
 document.addEventListener("DOMContentLoaded", function () {
-  // fetch("https://695ff8f77f037703a815576c.mockapi.io/check")
-  //   .then((response) => response.json())
-  //   .then((data) => {
-  //     if (data[0].check === false) {
-  //       alert("Phiên bản này đã bị vô hiệu hóa. Vui lòng liên hệ tác giả 0862201004 để được hỗ trợ.");
-  //       window.close();
-  //     }
-  //   });
+  fetch("https://nguyentinhquoc.github.io/api-extention/api.json")
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+      return response.json();
+    })
+    .then((data) => {
+      console.log("Dữ liệu từ API:", data);
+
+      // Giả sử data là mảng, lấy phần tử đầu tiên
+      // Nếu chỉ có 1 object, có thể dùng data.exp trực tiếp
+      const expDateStr = data[0]?.exp || data.exp;
+
+      if (!expDateStr) {
+        console.warn("Không tìm thấy trường 'exp' trong JSON");
+        return;
+      }
+      const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+      console.log("Hôm nay:", today, "| Hết hạn:", expDateStr);
+      if (today > expDateStr) {
+        alert("Phiên bản này đã hết hạn sử dụng.\nVui lòng liên hệ tác giả: 0862201004 để được hỗ trợ.");
+        document.body.innerHTML = `
+<div style="
+    display: flex; 
+    justify-content: center; 
+    align-items: center; 
+    height: 100vh; 
+    margin: 0; 
+    background-color: #f8f9fa; 
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+">
+    <div style="
+        background: white; 
+        padding: 40px; 
+        border-radius: 12px; 
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+        text-align: center; 
+        border-top: 5px solid #ff4757;
+        max-width: 400px;
+    ">
+        <h2 style="color: #2f3542; margin-bottom: 10px;">⚠️ Phiên bản hết hạn!</h2>
+        <p style="color: #57606f; font-size: 16px; margin-bottom: 20px;">
+            Vui lòng gia hạn bản quyền để tiếp tục sử dụng dịch vụ.
+        </p>
+        <div style="
+            background: #f1f2f6; 
+            padding: 15px; 
+            border-radius: 8px; 
+            font-weight: bold; 
+            color: #ff4757;
+        ">
+            Liên hệ: Nguyễn Tình (wavebear) <br> 
+            <span style="font-size: 20px;">Zalo: 0866201004</span>
+        </div>
+    </div>
+</div>
+`;
+      } else {
+        console.log("Phiên bản còn hạn đến:", expDateStr);
+      }
+    })
+    .catch((error) => {
+      window.close();
+      console.error("Lỗi khi kiểm tra hạn sử dụng:", error);
+      alert("Không thể kiểm tra hạn sử dụng. Vui lòng kiểm tra kết nối mạng.");
+    });
 
   const enableBtn = document.getElementById("enableEdit");
   const disableBtn = document.getElementById("disableEdit");
