@@ -286,12 +286,16 @@ class TextEditor {
     this.showToast("✎ Chế độ chỉnh sửa đã bật - Click vào text để sửa");
   }
 
+
+  
+  
+
+
   /**
    * Tắt chế độ chỉnh sửa: gỡ listeners, khôi phục trạng thái element/contenteditable.
    */
   disableEditing() {
     if (!this.isEditing) return;
-
     this.isEditing = false;
     document.body.style.cursor = "default";
     document.body.classList.remove("text-editor-active");
@@ -305,6 +309,8 @@ class TextEditor {
 
     this.showToast("⏸ Chế độ chỉnh sửa đã tắt");
   }
+
+  
 
   /**
    * Gắn các listener chính khi chỉnh sửa: click/input/blur/keydown.
@@ -330,15 +336,33 @@ class TextEditor {
    * Gắn listener để vô hiệu hóa click link trong khi đang chỉnh sửa.
    */
   enableLinks() {
+    // Ngăn chặn focus vào input checkbox
+    document.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.addEventListener("click", (event) => {
+        event.stopPropagation();
+      }, true);
+    });
+
+    
+
+    // Ngăn hành vi click vào link khi đang chỉnh sửa
     document.querySelectorAll("a").forEach((link) => {
       link.addEventListener("click", this.handleLinkClick, true);
     });
   }
 
+
   /**
    * Gỡ listener vô hiệu hóa link.
    */
   disableLinks() {
+
+    // khôi phục Ngăn chặn focus vào input checkbox
+    document.querySelectorAll('input[type="checkbox"]').forEach((checkbox) => {
+      checkbox.removeEventListener("click", (event) => {
+        event.stopPropagation();
+      }, true);
+    });
     document.querySelectorAll("a").forEach((link) => {
       link.removeEventListener("click", this.handleLinkClick, true);
     });
@@ -380,7 +404,7 @@ class TextEditor {
    * @param {Element} element
    */
   startEditing(element) {
-    const selector = this.generateSelector(element);
+    const selector = this.generateSelector(element, true);
     if (!this.originalContents.has(selector)) {
       this.originalContents.set(selector, element.innerHTML);
     }
@@ -510,7 +534,7 @@ class TextEditor {
    * @param {Element} element
    * @returns {string} selector
    */
-  generateSelector(element) {
+  generateSelector(element, edit = false) {
     if (!element || element.nodeType !== 1) return "";
 
     // Tìm span có data-surface bằng cách đi từ element lên cha
@@ -552,15 +576,15 @@ class TextEditor {
       '\'] div[geotextcolor="value"] span';
 
     // Kiểm tra selector có unique không
-    try {
-      const matches = document.querySelectorAll(finalSelector);
-
-      if (matches.length === 1) {
-      } else {
-        this.showToast("Chỉ có thể chọn phần tử được phép chỉnh sửa.");
-      }
-    } catch (_) {}
-
+    if(edit) {
+      try {
+        const matches = document.querySelectorAll(finalSelector);
+        if (matches.length === 1) {
+        } else {
+          this.showToast("Chỉ có thể chọn phần tử được phép chỉnh sửa.");
+        }
+      } catch (_) {}
+    }
     return finalSelector;
   }
 
